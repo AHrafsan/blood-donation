@@ -37,21 +37,32 @@ if (isset($_GET['reject_request'])) {
     $conn->query("UPDATE requests SET status = 'rejected' WHERE id = $id");
 }
 
-// Fetch Data
+// Get data
 $blood_groups = $conn->query("SELECT * FROM blood_groups");
-$pending_donors = $conn->query("SELECT donors.id, donors.name, donors.phone, donors.address, blood_groups.name AS blood_group 
-                                FROM donors JOIN blood_groups ON donors.blood_group_id = blood_groups.id 
-                                WHERE donors.approved = 0");
-$blood_requests = $conn->query("SELECT requests.id, requester_name, phone, address, blood_groups.name AS blood_group, status 
-                                FROM requests JOIN blood_groups ON requests.blood_group_id = blood_groups.id
-                                ORDER BY requests.id DESC");
+
+$pending_donors = $conn->query("
+    SELECT donors.id, donors.name, donors.phone, donors.address, blood_groups.name AS blood_group 
+    FROM donors 
+    JOIN blood_groups ON donors.blood_group_id = blood_groups.id 
+    WHERE donors.approved = 0
+");
+
+$blood_requests = $conn->query("
+    SELECT requests.id, requests.requester_name, requests.phone AS requester_phone, requests.address, 
+           blood_groups.name AS blood_group, requests.status,
+           donors.name AS donor_name, donors.phone AS donor_phone
+    FROM requests
+    JOIN blood_groups ON requests.blood_group_id = blood_groups.id
+    LEFT JOIN donors ON requests.donor_id = donors.id
+    ORDER BY requests.id DESC
+");
 ?>
 <!DOCTYPE html>
 <html>
 <head>
     <title>Admin Dashboard</title>
     <style>
-        body { font-family: Arial, sans-serif; background: #f5f6fa; padding: 20px; }
+        body { font-family: Arial; background: #f5f6fa; padding: 20px; }
         h1 { text-align: center; color: #d63031; margin-bottom: 30px; }
         .section { background: white; padding: 20px; border-radius: 10px; margin-bottom: 30px; box-shadow: 0px 4px 8px rgba(0,0,0,0.1); }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; }
@@ -110,13 +121,24 @@ $blood_requests = $conn->query("SELECT requests.id, requester_name, phone, addre
     <h2>Blood Requests</h2>
     <?php if ($blood_requests->num_rows > 0) { ?>
         <table>
-            <tr><th>Name</th><th>Phone</th><th>Address</th><th>Blood Group</th><th>Status</th><th>Action</th></tr>
+            <tr>
+                <th>Requester Name</th>
+                <th>Requester Phone</th>
+                <th>Address</th>
+                <th>Blood Group</th>
+                <th>Donor Name</th>
+                <th>Donor Phone</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
             <?php while($req = $blood_requests->fetch_assoc()) { ?>
                 <tr>
                     <td><?= $req['requester_name'] ?></td>
-                    <td><?= $req['phone'] ?></td>
+                    <td><?= $req['requester_phone'] ?></td>
                     <td><?= $req['address'] ?></td>
                     <td><?= $req['blood_group'] ?></td>
+                    <td><?= $req['donor_name'] ? $req['donor_name'] : '-' ?></td>
+                    <td><?= $req['donor_phone'] ? $req['donor_phone'] : '-' ?></td>
                     <td><?= ucfirst($req['status']) ?></td>
                     <td>
                         <?php if ($req['status'] == 'pending') { ?>

@@ -1,5 +1,4 @@
 <?php
-// Database connection
 $conn = new mysqli("localhost", "root", "", "healthbridge");
 if ($conn->connect_error) { die("Connection failed: " . $conn->connect_error); }
 
@@ -9,9 +8,10 @@ if (isset($_POST['send_request'])) {
     $phone = $_POST['phone'];
     $address = $_POST['address'];
     $blood_group_id = $_POST['blood_group_id'];
+    $donor_id = $_POST['donor_id'];
 
-    $stmt = $conn->prepare("INSERT INTO requests (requester_name, phone, address, blood_group_id, status) VALUES (?, ?, ?, ?, 'pending')");
-    $stmt->bind_param("sssi", $name, $phone, $address, $blood_group_id);
+    $stmt = $conn->prepare("INSERT INTO requests (requester_name, phone, address, blood_group_id, donor_id, status) VALUES (?, ?, ?, ?, ?, 'pending')");
+    $stmt->bind_param("sssii", $name, $phone, $address, $blood_group_id, $donor_id);
     $stmt->execute();
     $success = "Your request has been sent. Please wait for admin approval.";
 }
@@ -33,7 +33,7 @@ if (isset($_GET['filter'])) {
     }
 }
 
-// Fetch filtered donors
+// Fetch donors
 $donors = $conn->query("
     SELECT donors.id, donors.name, donors.image, donors.phone, donors.address, donors.blood_group_id, blood_groups.name AS blood_group
     FROM donors
@@ -46,7 +46,7 @@ $donors = $conn->query("
 <head>
     <title>Blood Donors</title>
     <style>
-        body { font-family: Arial, sans-serif; background: #f5f6fa; margin: 0; padding: 20px; }
+        body { font-family: Arial, sans-serif; background: #f5f6fa; padding: 20px; }
         h1 { text-align: center; color: #d63031; }
         .success { text-align: center; color: green; }
         .filter-box { display: flex; justify-content: center; margin: 20px 0; gap: 10px; }
@@ -64,8 +64,9 @@ $donors = $conn->query("
         button { background: #d63031; color: white; padding: 10px; border: none; border-radius: 5px; cursor: pointer; width: 100%; }
     </style>
     <script>
-        function openRequestModal(bloodGroupId, donorName) {
+        function openRequestModal(bloodGroupId, donorName, donorId) {
             document.getElementById("blood_group_id").value = bloodGroupId;
+            document.getElementById("donor_id").value = donorId; // ✅ Set donor ID
             document.getElementById("donor_name_display").innerText = donorName;
             document.getElementById("requestModal").style.display = "flex";
         }
@@ -103,7 +104,7 @@ $donors = $conn->query("
                 <p><strong>Phone:</strong> <?= $d['phone'] ?></p>
                 <p><strong>Address:</strong> <?= $d['address'] ?></p>
                 <span class="blood-group"><?= $d['blood_group'] ?></span><br>
-                <span class="btn" onclick="openRequestModal('<?= $d['blood_group_id'] ?>', '<?= $d['name'] ?>')">Request Blood</span>
+                <span class="btn" onclick="openRequestModal('<?= $d['blood_group_id'] ?>', '<?= $d['name'] ?>', '<?= $d['id'] ?>')">Request Blood</span>
             </div>
     <?php } } else { echo "<p style='text-align:center;'>No donors found.</p>"; } ?>
 </div>
@@ -114,6 +115,7 @@ $donors = $conn->query("
         <h3>Request Blood from <span id="donor_name_display"></span></h3>
         <form method="POST">
             <input type="hidden" name="blood_group_id" id="blood_group_id">
+            <input type="hidden" name="donor_id" id="donor_id"> <!-- ✅ Hidden donor ID -->
             <input type="text" name="name" placeholder="Your Name" required>
             <input type="text" name="phone" placeholder="Your Phone" required>
             <input type="text" name="address" placeholder="Your Address" required>
