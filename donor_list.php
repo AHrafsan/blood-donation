@@ -21,21 +21,20 @@ $blood_groups_list = $conn->query("SELECT * FROM blood_groups");
 
 // Filtering logic
 $where = "WHERE donors.approved = 1";
-if (isset($_GET['filter'])) {
-    $selected_bg = $_GET['blood_group'];
-    $location = $_GET['location'];
+$selected_bg = $_GET['blood_group'] ?? '';
+$location = $_GET['location'] ?? '';
+$eligibility = $_GET['eligibility'] ?? '';
 
-    if (!empty($selected_bg)) {
-        $where .= " AND donors.blood_group_id = " . intval($selected_bg);
-    }
-    if (!empty($location)) {
-        $where .= " AND donors.address LIKE '%" . $conn->real_escape_string($location) . "%'";
-    }
+if (!empty($selected_bg)) {
+    $where .= " AND donors.blood_group_id = " . intval($selected_bg);
+}
+if (!empty($location)) {
+    $where .= " AND donors.address LIKE '%" . $conn->real_escape_string($location) . "%'";
 }
 
 // Fetch donors
 $donors = $conn->query("
-    SELECT donors.id, donors.name, donors.image, donors.phone, donors.address, donors.blood_group_id, blood_groups.name AS blood_group
+    SELECT donors.id, donors.name, donors.image, donors.phone, donors.address, donors.blood_group_id, donors.last_donation_date, blood_groups.name AS blood_group
     FROM donors
     JOIN blood_groups ON donors.blood_group_id = blood_groups.id
     $where
@@ -51,7 +50,6 @@ $donors = $conn->query("
         .success { text-align: center; color: green; }
         .filter-box { display: flex; justify-content: center; margin: 20px 0; gap: 10px; }
         select, input[type=text] { padding: 8px; border: 1px solid #ccc; border-radius: 5px; }
-        button.filter-btn { background: #0984e3; color: white; padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; }
         .donor-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; margin-top: 30px; }
         .donor-card { background: white; border-radius: 10px; box-shadow: 0px 4px 8px rgba(0,0,0,0.1); padding: 15px; text-align: center; }
         .donor-card img { width: 100%; height: 200px; object-fit: cover; border-bottom: 3px solid #d63031; }
@@ -66,7 +64,7 @@ $donors = $conn->query("
     <script>
         function openRequestModal(bloodGroupId, donorName, donorId) {
             document.getElementById("blood_group_id").value = bloodGroupId;
-            document.getElementById("donor_id").value = donorId; // ✅ Set donor ID
+            document.getElementById("donor_id").value = donorId;
             document.getElementById("donor_name_display").innerText = donorName;
             document.getElementById("requestModal").style.display = "flex";
         }
@@ -81,32 +79,75 @@ $donors = $conn->query("
 <?php if (isset($success)) echo "<p class='success'>$success</p>"; ?>
 
 <!-- Filter Form -->
-<form method="GET" class="filter-box">
-    <select name="blood_group">
+<form method="GET" class="filter-box" id="filterForm">
+    <select name="blood_group" onchange="document.getElementById('filterForm').submit();">
         <option value="">All Blood Groups</option>
-        <?php while($bg = $blood_groups_list->fetch_assoc()) { ?>
-            <option value="<?= $bg['id'] ?>" <?= (isset($selected_bg) && $selected_bg == $bg['id']) ? 'selected' : '' ?>>
+        <?php
+        // Reset pointer to re-use result
+        mysqli_data_seek($blood_groups_list, 0);
+        while($bg = $blood_groups_list->fetch_assoc()) { ?>
+            <option value="<?= $bg['id'] ?>" <?= ($selected_bg == $bg['id']) ? 'selected' : '' ?>>
                 <?= $bg['name'] ?>
             </option>
         <?php } ?>
     </select>
-    <input type="text" name="location" placeholder="Enter location" value="<?= isset($location) ? htmlspecialchars($location) : '' ?>">
-    <button type="submit" name="filter" class="filter-btn">Filter</button>
+
+    <input type="text" name="location" placeholder="Enter location"
+           value="<?= htmlspecialchars($location) ?>"
+           onkeydown="if(event.key === 'Enter'){this.form.submit();}">
+
+    <select name="eligibility" onchange="document.getElementById('filterForm').submit();">
+        <option value="">All Donors</option>
+        <option value="eligible" <?= ($eligibility == 'eligible') ? 'selected' : '' ?>>Eligible</option>
+        <option value="not_eligible" <?= ($eligibility == 'not_eligible') ? 'selected' : '' ?>>Not Eligible</option>
+    </select>
 </form>
 
 <!-- Donor Cards -->
 <div class="donor-container">
-    <?php if ($donors->num_rows > 0) {
-        while($d = $donors->fetch_assoc()) { ?>
-            <div class="donor-card">
-                <img src="<?= $d['image'] ?>" alt="Donor">
-                <h3><?= $d['name'] ?></h3>
-                <p><strong>Phone:</strong> <?= $d['phone'] ?></p>
-                <p><strong>Address:</strong> <?= $d['address'] ?></p>
-                <span class="blood-group"><?= $d['blood_group'] ?></span><br>
+<?php
+if ($donors->num_rows > 0) {
+    while($d = $donors->fetch_assoc()) {
+        $can_donate = true;
+        $next_eligible_date = '';
+
+        if (!empty($d['last_donation_date'])) {
+            $last_date = new DateTime($d['last_donation_date']);
+            $next_date = clone $last_date;
+            $next_date->modify('+3 months');
+            $next_eligible_date = $next_date->format('Y-m-d');
+
+            if (new DateTime() < $next_date) {
+                $can_donate = false;
+            }
+        }
+
+        // Eligibility filter check
+        if ($eligibility === 'eligible' && !$can_donate) continue;
+        if ($eligibility === 'not_eligible' && $can_donate) continue;
+?>
+        <div class="donor-card">
+            <img src="<?= $d['image'] ?>" alt="Donor">
+            <h3><?= $d['name'] ?></h3>
+            <p><strong>Phone:</strong> <?= $d['phone'] ?></p>
+            <p><strong>Address:</strong> <?= $d['address'] ?></p>
+            <p><strong>Last Donation:</strong> <?= !empty($d['last_donation_date']) ? $d['last_donation_date'] : 'Never' ?></p>
+            <?php if (!$can_donate): ?>
+                <p style="color:red;"><strong>Next Eligible:</strong> <?= $next_eligible_date ?></p>
+            <?php endif; ?>
+            <span class="blood-group"><?= $d['blood_group'] ?></span><br>
+            <?php if ($can_donate): ?>
                 <span class="btn" onclick="openRequestModal('<?= $d['blood_group_id'] ?>', '<?= $d['name'] ?>', '<?= $d['id'] ?>')">Request Blood</span>
-            </div>
-    <?php } } else { echo "<p style='text-align:center;'>No donors found.</p>"; } ?>
+            <?php else: ?>
+                <span class="btn" style="background:gray;cursor:not-allowed;">Not Eligible</span>
+            <?php endif; ?>
+        </div>
+<?php
+    }
+} else {
+    echo "<p style='text-align:center;'>No donors found.</p>";
+}
+?>
 </div>
 
 <!-- Request Modal -->
@@ -115,7 +156,7 @@ $donors = $conn->query("
         <h3>Request Blood from <span id="donor_name_display"></span></h3>
         <form method="POST">
             <input type="hidden" name="blood_group_id" id="blood_group_id">
-            <input type="hidden" name="donor_id" id="donor_id"> <!-- ✅ Hidden donor ID -->
+            <input type="hidden" name="donor_id" id="donor_id">
             <input type="text" name="name" placeholder="Your Name" required>
             <input type="text" name="phone" placeholder="Your Phone" required>
             <input type="text" name="address" placeholder="Your Address" required>
