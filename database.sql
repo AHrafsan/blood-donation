@@ -28,3 +28,5 @@ CREATE TABLE requests (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (blood_group_id) REFERENCES blood_groups(id)
 );
+
+    ALTER TABLE donors ADD last_donation_date DATE NULL;
