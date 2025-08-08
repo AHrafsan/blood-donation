@@ -75,6 +75,64 @@ $donors = $conn->query("
 </head>
 <body>
 
+<div class="navbar">
+    <div class="nav-left">
+        <a href="donor_list.php" class="brand">HealthBridge</a>
+    </div>
+    <div class="nav-right">
+        <a href="donor_list.php" class="nav-btn">Home</a>
+        <a href="logout.php" class="nav-btn logout">Logout</a>
+    </div>
+</div>
+
+<style>
+    .navbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        
+        padding: 12px 20px;
+        color: black;
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+    }
+    .navbar .brand {
+        font-size: 20px;
+        font-weight: bold;
+        color: black;
+        text-decoration: none;
+    }
+    .nav-right {
+        display: flex;
+        gap: 15px;
+    }
+    .nav-btn {
+        background: transparent;
+        border: 2px solid white;
+        padding: 6px 14px;
+        border-radius: 5px;
+        color: black;
+        text-decoration: none;
+        font-weight: bold;
+        transition: 0.3s;
+    }
+    .nav-btn:hover {
+        background: black;
+        color: white;
+    }
+    
+
+    .logout {
+        border-color: none;
+    }
+    .logout:hover {
+        background: black;
+        color: white;
+    }
+</style>
+
+
 <h1>Available Blood Donors</h1>
 <?php if (isset($success)) echo "<p class='success'>$success</p>"; ?>
 
