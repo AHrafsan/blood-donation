@@ -13,10 +13,10 @@ if (isset($_POST['send_request'])) {
     $stmt = $conn->prepare("INSERT INTO requests (requester_name, phone, address, blood_group_id, donor_id, status) VALUES (?, ?, ?, ?, ?, 'pending')");
     $stmt->bind_param("sssii", $name, $phone, $address, $blood_group_id, $donor_id);
     $stmt->execute();
-    $success = "Your request has been sent. Please wait for admin approval.";
+    $success = "✅ Your request has been sent. Please wait for admin approval.";
 }
 
-// Get all blood groups for filter
+// Get all blood groups
 $blood_groups_list = $conn->query("SELECT * FROM blood_groups");
 
 // Filtering logic
@@ -32,7 +32,6 @@ if (!empty($location)) {
     $where .= " AND donors.address LIKE '%" . $conn->real_escape_string($location) . "%'";
 }
 
-// Fetch donors
 $donors = $conn->query("
     SELECT donors.id, donors.name, donors.image, donors.phone, donors.address, donors.blood_group_id, donors.last_donation_date, blood_groups.name AS blood_group
     FROM donors
@@ -43,23 +42,178 @@ $donors = $conn->query("
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Blood Donors</title>
+    <title>Blood Donors - HealthBridge</title>
     <style>
-        body { font-family: Arial, sans-serif; background: #f5f6fa; padding: 20px; }
-        h1 { text-align: center; color: #d63031; }
-        .success { text-align: center; color: green; }
-        .filter-box { display: flex; justify-content: center; margin: 20px 0; gap: 10px; }
-        select, input[type=text] { padding: 8px; border: 1px solid #ccc; border-radius: 5px; }
-        .donor-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; margin-top: 30px; }
-        .donor-card { background: white; border-radius: 10px; box-shadow: 0px 4px 8px rgba(0,0,0,0.1); padding: 15px; text-align: center; }
-        .donor-card img { width: 100%; height: 200px; object-fit: cover; border-bottom: 3px solid #d63031; }
-        .donor-card h3 { margin: 10px 0; }
-        .blood-group { background: #d63031; color: white; padding: 5px 10px; border-radius: 20px; }
-        .btn { background: #0984e3; color: white; padding: 8px 15px; border-radius: 5px; cursor: pointer; display: inline-block; margin-top: 10px; }
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); justify-content: center; align-items: center; }
-        .modal-content { background: white; padding: 20px; border-radius: 10px; width: 350px; }
-        input { width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 5px; }
-        button { background: #d63031; color: white; padding: 10px; border: none; border-radius: 5px; cursor: pointer; width: 100%; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f0f2f5;
+            margin: 0;
+            padding: 0;
+        }
+        /* Navbar */
+        .navbar {
+            background: linear-gradient(90deg, #d63031, #ff7675);
+            padding: 14px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+        .navbar .brand {
+            font-size: 22px;
+            font-weight: bold;
+            color: white;
+            text-decoration: none;
+        }
+        .nav-right a {
+            background: rgba(255,255,255,0.2);
+            padding: 8px 14px;
+            border-radius: 6px;
+            color: white;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        .nav-right a:hover {
+            background: white;
+            color: #d63031;
+        }
+        /* Title */
+        h1 {
+            text-align: center;
+            color: #d63031;
+            margin-top: 25px;
+        }
+        .success {
+            text-align: center;
+            background: #d4edda;
+            color: #155724;
+            padding: 10px;
+            border-radius: 6px;
+            width: 60%;
+            margin: 15px auto;
+            font-weight: bold;
+        }
+        /* Filters */
+        .filter-box {
+            display: flex;
+            justify-content: center;
+            margin: 25px auto;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        select, input[type=text] {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 15px;
+            background: white;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+        }
+        /* Donor Cards */
+        .donor-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+            gap: 20px;
+            padding: 20px;
+        }
+        .donor-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            overflow: hidden;
+            transition: transform 0.2s ease, box-shadow 0.3s;
+        }
+        .donor-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 18px rgba(0,0,0,0.15);
+        }
+        .donor-card img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+        .donor-card h3 {
+            margin: 12px 0 5px;
+            text-align: center;
+        }
+        .donor-card p {
+            font-size: 14px;
+            margin: 4px 0;
+            text-align: center;
+        }
+        /* Center blood group & button */
+        .donor-actions {
+            text-align: center;
+            margin-top: 10px;
+        }
+        .blood-group {
+            display: inline-block;
+            background: #d63031;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        .btn {
+            background: #0984e3;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: inline-block;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        .btn:hover {
+            background: #0768b3;
+        }
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.4);
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 12px;
+            width: 350px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        input, button {
+            width: 100%;
+            padding: 10px;
+            margin: 6px 0;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 15px;
+        }
+        button {
+            background: #d63031;
+            color: white;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #b72525;
+        }
     </style>
     <script>
         function openRequestModal(bloodGroupId, donorName, donorId) {
@@ -76,62 +230,12 @@ $donors = $conn->query("
 <body>
 
 <div class="navbar">
-    <div class="nav-left">
-        <a href="donor_list.php" class="brand">HealthBridge</a>
-    </div>
+    <a href="donor_list.php" class="brand">HealthBridge</a>
     <div class="nav-right">
-        <a href="donor_list.php" class="nav-btn">Home</a>
-        <a href="logout.php" class="nav-btn logout">Logout</a>
+        <a href="donor_list.php">Home</a>
+        <a href="logout.php">Logout</a>
     </div>
 </div>
-
-<style>
-    .navbar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        
-        padding: 12px 20px;
-        color: black;
-        position: sticky;
-        top: 0;
-        z-index: 1000;
-    }
-    .navbar .brand {
-        font-size: 20px;
-        font-weight: bold;
-        color: black;
-        text-decoration: none;
-    }
-    .nav-right {
-        display: flex;
-        gap: 15px;
-    }
-    .nav-btn {
-        background: transparent;
-        border: 2px solid white;
-        padding: 6px 14px;
-        border-radius: 5px;
-        color: black;
-        text-decoration: none;
-        font-weight: bold;
-        transition: 0.3s;
-    }
-    .nav-btn:hover {
-        background: black;
-        color: white;
-    }
-    
-
-    .logout {
-        border-color: none;
-    }
-    .logout:hover {
-        background: black;
-        color: white;
-    }
-</style>
-
 
 <h1>Available Blood Donors</h1>
 <?php if (isset($success)) echo "<p class='success'>$success</p>"; ?>
@@ -140,9 +244,7 @@ $donors = $conn->query("
 <form method="GET" class="filter-box" id="filterForm">
     <select name="blood_group" onchange="document.getElementById('filterForm').submit();">
         <option value="">All Blood Groups</option>
-        <?php
-        // Reset pointer to re-use result
-        mysqli_data_seek($blood_groups_list, 0);
+        <?php mysqli_data_seek($blood_groups_list, 0);
         while($bg = $blood_groups_list->fetch_assoc()) { ?>
             <option value="<?= $bg['id'] ?>" <?= ($selected_bg == $bg['id']) ? 'selected' : '' ?>>
                 <?= $bg['name'] ?>
@@ -180,25 +282,28 @@ if ($donors->num_rows > 0) {
             }
         }
 
-        // Eligibility filter check
         if ($eligibility === 'eligible' && !$can_donate) continue;
         if ($eligibility === 'not_eligible' && $can_donate) continue;
 ?>
         <div class="donor-card">
             <img src="<?= $d['image'] ?>" alt="Donor">
-            <h3><?= $d['name'] ?></h3>
-            <p><strong>Phone:</strong> <?= $d['phone'] ?></p>
-            <p><strong>Address:</strong> <?= $d['address'] ?></p>
-            <p><strong>Last Donation:</strong> <?= !empty($d['last_donation_date']) ? $d['last_donation_date'] : 'Never' ?></p>
-            <?php if (!$can_donate): ?>
-                <p style="color:red;"><strong>Next Eligible:</strong> <?= $next_eligible_date ?></p>
-            <?php endif; ?>
-            <span class="blood-group"><?= $d['blood_group'] ?></span><br>
-            <?php if ($can_donate): ?>
-                <span class="btn" onclick="openRequestModal('<?= $d['blood_group_id'] ?>', '<?= $d['name'] ?>', '<?= $d['id'] ?>')">Request Blood</span>
-            <?php else: ?>
-                <span class="btn" style="background:gray;cursor:not-allowed;">Not Eligible</span>
-            <?php endif; ?>
+            <div style="padding: 12px;">
+                <h3><?= $d['name'] ?></h3>
+                <p><strong>📞</strong> <?= $d['phone'] ?></p>
+                <p><strong>📍</strong> <?= $d['address'] ?></p>
+                <p><strong>🩸 Last Donation:</strong> <?= !empty($d['last_donation_date']) ? $d['last_donation_date'] : 'Never' ?></p>
+                <?php if (!$can_donate): ?>
+                    <p style="color:red;"><strong>Next Eligible:</strong> <?= $next_eligible_date ?></p>
+                <?php endif; ?>
+                <div class="donor-actions">
+                    <span class="blood-group"><?= $d['blood_group'] ?></span><br>
+                    <?php if ($can_donate): ?>
+                        <span class="btn" onclick="openRequestModal('<?= $d['blood_group_id'] ?>', '<?= $d['name'] ?>', '<?= $d['id'] ?>')">Request Blood</span>
+                    <?php else: ?>
+                        <span class="btn" style="background:gray;cursor:not-allowed;">Not Eligible</span>
+                    <?php endif; ?>
+                </div>
+            </div>
         </div>
 <?php
     }
